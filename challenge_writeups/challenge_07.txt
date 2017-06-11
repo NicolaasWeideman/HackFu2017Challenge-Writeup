@@ -1,0 +1,98 @@
+####################################
+    CHALLENGE 07 (Steganography)
+####################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains five files: three image files "Input1.png", "Input2.png" and
+  "Output1.png". The instructions in "instructions.txt" and the encrypted solution file in
+  "solution.txt.enc". The instructions suggest that we are searching for a message in three images
+  that look like "coloured" static.
+
+
+INFORMATION GATHERING
+=====================
+
+  The images "Input1.png" and "Input2.png" are coloured images, that resemble coloured static,
+  while the image "Output1.png" is black and white. Even though "Output1.png" also resembles black
+  and white static, it appears less noisy than the coloured images. Images "Input1.png" and
+  "Output1.png" are 112 by 60 pixels, while the image "Input2.png" is 172 by 172 pixels.
+
+
+SOLUTION
+========
+
+  Considering the names of images "Input1.png" and "Output1.png", as well as the fact that they
+  are equal in pixel size, it seems that we are required to determine a specific way to map an
+  RGB image to a black and white image. Printing the pixel values of "Input1.png" next to
+  the corresponding pixel values of "Output2.png", reveals that some pixels of "Input1.png" with
+  the same red, green and blue components, map to both white and black pixels in "Output2.png".
+  Specifically, for example, in the image "Input1.png", both the pixels at coordinates (18, 5) and
+  (19, 5) are coloured (0, 237, 43). However, in image "Output1.png", the pixel at coordinates
+  (18, 5) is black, while the pixel at coordinates (19, 5) is white.
+
+  From this we can conclude that pixels are not mapped according to their colour alone.
+  Most likely, the position of a pixel is also significant.
+
+  Inspecting the image "Output2.png", reveals that white and black pixels tend to group together
+  in blocks of length a multiple of five pixels. This is true for the entire image, except a row
+  of two pixels at the top of the image and a column of four pixels to the left. Let us therefore
+  ignore these pixels in both "Input1.png" and "Output2.png" for the rest of the analysis.
+  Next, let us consider a neighbourhood of 5 by 5 pixels, when mapping from the RGB image to the
+  black and white image.
+
+  Printing the average, minimum and maximum values for the red, green and blue components of a
+  5 by 5 pixel neighbourhood, reveals that seemingly only the neighbourhoods that have a maximum
+  of 255, for either the red, green or blue components map to black. The rest, map to white.
+
+  We can test this hypothesis by using a Python script to convert input images in this manner.
+  Listing 1 contains the relevant code for this procedure.
+   _______________________________________________________
+  | im = Image.open(FILE)                                 |
+  | pixels = im.load()                                    |
+  | max_j, max_i = im.size                                |
+  | im_new = Image.new(im.mode, im.size)                  |
+  | pixels_new = im_new.load()                            |
+  |                                                       |
+  | for i in range(2, max_i, 5):                          |
+  |   for j in range(4, max_j, 5):                        |
+  |     max_r, max_g, max_b = 0, 0, 0                     |
+  |     max_component = 0                                 |
+  |     for i2 in range(i, min(i + 5, max_i)):            |
+  |       for j2 in range(j, min(j + 5, max_j)):          |
+  |         r, g, b = pixels[j2, i2][:3]                  |
+  |         max_r = max(max_r, r)                         |
+  |         max_g = max(max_g, g)                         |
+  |         max_b = max(max_b, b)                         |
+  |         max_component = max(max_r, max_g, max_b)      |
+  |                                                       |
+  |     if max_component == 255:                          |
+  |       map_colour = BLACK                              |
+  |     else:                                             |
+  |       map_colour = WHITE                              |
+  |                                                       |
+  |     for i2 in range(i, min(i + 5, max_i)):            |
+  |       for j2 in range(j, min(j + 5, max_j)):          |
+  |         pixels_new[j2, i2] =  map_colour              |
+  | im_new.save(FILE_NEW)                                 |
+  |_______________________________________________________|
+  |Listing 1: A Python script to convert the input images |
+  | to (approximately) the correct output images.         |
+  |_______________________________________________________|
+
+  Using the above mentioned procedure we can almost perfectly convert the image "Input1.png"
+  to "Output1.png", the only errors are in the top rows and left columns, which we are ignoring.
+
+  As the largest part of the reconstructed image of "Output1.png" is correct, using this method
+  on the image "Input2.png" should at least give a clear view of what it should be, if not
+  revealing the solution entirely. Therefore, further ignoring these errors and using
+  the image "Input2.png" as input for the procedure, reveals a QR code as the output image.
+  Scanning this QR code, reveals the solution to the challenge:
+    "hackfuwearehonouredtohavewithusarevolutionaryofadifferentcalibre"
+
