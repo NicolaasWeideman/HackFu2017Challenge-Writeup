@@ -1,0 +1,314 @@
+##########################################
+    CHALLENGE 09 (Reverse Engineering)
+##########################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains three files: an Android package Kit file "Masterclass.apk",
+  the instructions in "instructions.txt" and the encrypted solution file in "solution.txt.enc".
+  The instructions suggest that we are attempting to break the encryption of some Android app.
+
+
+INFORMATION GATHERING
+=====================
+
+  As Android package Kit files are merely compressed archives [1], they can be extracted to reveal
+  some of their contents. Within the directory of the uncompressed app, three images can be found
+  in the "/res/raw" directory. These images are named "parsley.jpg", "rosemary.jpg"
+  and "thyme.jpg". Inspecting the parsley and rosemary images with a hexeditor, reveals nothing
+  interesting. However, inspecting the thyme image with a hexeditor reveals an additional 16 bytes
+  extra after its 0xFF 0XD9 JPG end-of-file marker. These bytes form the string:
+    "efEgabJorIfIafgu"
+
+  Running the app displays a countdown and it asks for a decryption key.
+
+
+SOLUTION
+========
+
+  Reverse Engineering the App
+  ---------------------------
+   When running the app and supplying the 16 byte string found at the end of "thyme.jpg" as
+   a decryption key, an error message is shown stating that the key is incorrect. Repeating this
+   process, but supplying the string in reverse, reveals a block of intelligible text, presented
+   beneath a label "Decrypted message". As the text is obviously not plain text, we must reverse
+   engineer the app to understand what went wrong.
+
+   The app can be decompiled by using apktool, with the following command:
+     apktool d Masterclass.apk
+   In the "/res/values" subdirectory of the decompiled app, there are two XML files, namely
+   "public.xml" and "strings.xml". Together, these files can be used to look up the strings used
+   in the app. In the "smali" subdirectory of the decompiled app, we can find the smali files,
+   which contain the disassembled code.
+
+   Inspecting the strings used in each smali file and glancing at the library methods called, the
+   following observations can be made:
+     1. "b.smali" seems to do the decryption.
+     2. "e.smali" accesses the "thyme.jpg" file.
+     3. "d.smali" contains a large base-64 encoded string.
+     4. "f.smali" seems to construct some type of key.
+
+   We will first inspect "b.smali" in more depth. By looking up the exception messages thrown in
+   the virtual method in "b.smali" (.method a(Ljava/lang/String;)Ljava/lang/String;), it can be
+   deduced that this method sends three strings as parameters to the decryption method:
+     1. A string made up of the last 16 bytes of the "thyme.jpg" image as the initialisation
+        vector (IV) (obtained by calling method a() in "e.smali"). These are the same bytes we
+        used the reverse of for the decryption key, earlier. Listing 1 contains the relevant code.
+         ______________________________________________________________________________________
+        | # Returns a string made up of the last 16 bytes of the thyme image                   |
+        | iget-object v0, p0, Lhackfu/mwr/com/masterclass/b;->b:Lhackfu/mwr/com/masterclass/e; |
+        | invoke-virtual {v0}, Lhackfu/mwr/com/masterclass/e;->a()Ljava/lang/String;           |
+        | move-result-object v0                                                                |
+        |                                                                                      |
+        | if-nez v0, :cond_0                                                                   |
+        |   ...                                                                                |
+        |   # "Could not retrieve IV."                                                         |
+        |   ...                                                                                |
+        | :cond_0                                                                              |
+        |______________________________________________________________________________________|
+        |Listing 1: Retrieving a string made up of the last 16 bytes of "thyme.jpg", for       |
+        | the IV.                                                                              |
+        |______________________________________________________________________________________|
+
+
+     2. A base-64 encoded string found in "d.smali" as the cipher text
+        (obtained by calling method a() in "d.smali"). Listing 2 contains the relevant code.
+         ______________________________________________________________________________________
+        | # Return base64 encoded string                                                       |
+        | iget-object v1, p0, Lhackfu/mwr/com/masterclass/b;->d:Lhackfu/mwr/com/masterclass/d; |
+        | invoke-virtual {v1}, Lhackfu/mwr/com/masterclass/d;->a()Ljava/lang/String;           |
+        | move-result-object v1                                                                |
+        |                                                                                      |
+        | .line 35                                                                             |
+        | if-nez v1, :cond_1                                                                   |
+        |   ...                                                                                |
+        |   # "Could not retrieve Cipher Text."                                                |
+        |   ...                                                                                |
+        | :cond_1                                                                              |
+        |______________________________________________________________________________________|
+        |Listing 2: Retrieving a base-64 encoded string found in "d.smali",                    |
+        |  for the cipher text                                                                 |
+        |______________________________________________________________________________________|
+
+
+     3. Either the first and only parameter of the current method, or some other string generated
+        by calling a function in "f.smali" as the decryption key. The value sent depends on
+        whether a private global boolean value is false and also if another function in "b.smali"
+        returns true. Listing 3 contains the relevant code.
+         __________________________________________________________________________________________
+        | # Get the global boolean e                                                               |
+        | iget-boolean v2, p0, Lhackfu/mwr/com/masterclass/b;->e:Z                                 |
+        | # Jump if it is true                                                                     |
+        | if-nez v2, :cond_2                                                                       |
+        |                                                                                          |
+        |   # Call the function a()                                                                |
+        |   invoke-direct {p0}, Lhackfu/mwr/com/masterclass/b;->a()Z                               |
+        |   move-result v2                                                                         |
+        |                                                                                          |
+        |   # Jump if it is false                                                                  |
+        |   if-eqz v2, :cond_2                                                                     |
+        |                                                                                          |
+        |     # Retrieve a string from f.a()                                                       |
+        |     iget-object v2, p0, Lhackfu/mwr/com/masterclass/b;->c:Lhackfu/mwr/com/masterclass/f; |
+        |     invoke-virtual {v2}, Lhackfu/mwr/com/masterclass/f;->a()Ljava/lang/String;           |
+        |     # and store it in the register holding the first parameter.                          |
+        |     move-result-object p1                                                                |
+        |                                                                                          |
+        |     .line 41                                                                             |
+        |     if-nez p1, :cond_2                                                                   |
+        |                                                                                          |
+        |       .line 42                                                                           |
+        |       ...                                                                                |
+        |       # "Could not retrieve Key."                                                        |
+        |       ...                                                                                |
+        | :cond_2                                                                                  |
+        |__________________________________________________________________________________________|
+        |Listring 3: If the private global boolean e is false and a() returns true, retrieve some  |
+        | string generated in "f.smali" and use it instead of the first parameter as the           |
+        | decryption key.                                                                          |
+        |__________________________________________________________________________________________|
+
+
+   The decryption key is the first parameter, the IV is the second and the cipher text is the last
+   parameter of the decryption function.
+
+   Further inspection of the conditions required to use the string generated in "f.smali" as the
+   decryption key (rather than the parameter), reveals that the private global boolean value used
+   when setting the decryption key (that should be false), is set to true in the constructor of
+   the class, as shown in Listing 4.
+    __________________________________________________________
+   | const/4 v0, 0x1                                          |
+   | iput-boolean v0, p0, Lhackfu/mwr/com/masterclass/b;->e:Z |
+   |__________________________________________________________|
+   |Listing 4: The private global boolean being set to true   |
+   | in the constructor of the class.                         |
+   |__________________________________________________________|
+
+
+   Also the function in "b.smali" (.method private a()Z) (that should return true), returns true
+   on Fridays. Listing 5 contains the relevant code.
+    ____________________________________________________________________________
+   | invoke-static {}, Ljava/util/Calendar;->getInstance()Ljava/util/Calendar;  |
+   | move-result-object v0                                                      |
+   |                                                                            |
+   | # Day of the week                                                          |
+   | const/4 v1, 0x7                                                            |
+   | invoke-virtual {v0, v1}, Ljava/util/Calendar;->get(I)I                     |
+   | move-result v0                                                             |
+   |                                                                            |
+   | # Should be 6 (Friday)                                                     |
+   | const/4 v1, 0x6                                                            |
+   |                                                                            |
+   | # If v0 == 6, return True                                                  |
+   | if-ne v0, v1, :cond_0                                                      |
+   |                                                                            |
+   | const/4 v0, 0x1                                                            |
+   |                                                                            |
+   | :goto_0                                                                    |
+   | return v0                                                                  |
+   |                                                                            |
+   | # Else return False                                                        |
+   | :cond_0                                                                    |
+   | const/4 v0, 0x0                                                            |
+   |                                                                            |
+   | goto :goto_0                                                               |
+   |____________________________________________________________________________|
+   |Listing 5: The function used to determine whether the decryption key        |
+   | should be retrieved from user input or the function from "f.smali".        |
+   |____________________________________________________________________________|
+
+
+   Further inspection of the constant strings in the decryption method in "b.smali"
+   (.method private a(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;)
+   reveals that the encryption algorithm is AES, the mode of operation is cipher block
+   chaining (CBC) with PKCS5 padding. This explains the garbled "plain text" we saw earlier. Since
+   AES was not used with a mode of operation that preserves integrity, the app needs to rely on a
+   padding error to detect an incorrect key. Even though an incorrect key will produce a padding
+   error with a probability of approximately 0.996 (See Appendix 1), it is still possible for
+   cipher text to decrypt to a garbled message with valid padding.
+
+   It seems we need to modify the app, in order to trick it to use the string generated
+   in "f.smali" as decryption key. First we modify the private global boolean e to be set to false
+   in the constructor. Listing 6 shows the modified code.
+    __________________________________________________________
+   | const/4 v0, 0x0 # <-- Changed to 0                       |
+   | iput-boolean v0, p0, Lhackfu/mwr/com/masterclass/b;->e:Z |
+   |__________________________________________________________|
+   |Listring 6: The modified constructor                      |
+   | to set the private global boolean to false.              |
+   |__________________________________________________________|
+
+
+   Next we modify the function that only returns true on Fridays, to always return true. Listing 7
+   shows the modified code.
+    ___________________________________________________________________________
+   | invoke-static {}, Ljava/util/Calendar;->getInstance()Ljava/util/Calendar; |
+   | move-result-object v0                                                     |
+   |                                                                           |
+   | # Day of the week                                                         |
+   | const/4 v1, 0x7                                                           |
+   | invoke-virtual {v0, v1}, Ljava/util/Calendar;->get(I)I                    |
+   | move-result v0                                                            |
+   |                                                                           |
+   | # Should be 6 (Friday)                                                    |
+   | const/4 v1, 0x6                                                           |
+   |                                                                           |
+   | # If v0 == 6, return True                                                 |
+   | if-ne v0, v1, :cond_0                                                     |
+   |                                                                           |
+   | const/4 v0, 0x1                                                           |
+   |                                                                           |
+   | :goto_0                                                                   |
+   | return v0                                                                 |
+   |                                                                           |
+   | # Else return False (True, now)                                           |
+   | :cond_0                                                                   |
+   | const/4 v0, 0x1 # <-- Changed to 1                                        |
+   |___________________________________________________________________________|
+   |Listing 7: The modified function to return True on Fridays                 |
+   | and all other days as well.                                               |
+   |___________________________________________________________________________|
+
+
+   Finally, we recompile our modified app with apktool:
+     apktool b Masterclass -o MasterclassMod.apk
+   In order for MasterclassMod.apk to be executed, it must be signed. To do this we first need to
+   generate a key:
+     keytool -genkey -v -keystore MasterclassMod.keystore -alias MasterclassMod_key -keyalg RSA -keysize 2048 -validity 10000
+   We use this key to sign MasterclassMode.apk:
+     jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore MasterclassMod.keystore MasterclassMod.apk MasterclassMod_key
+
+   Installing and running the modified app successfully decrypts the "soup.chef" file, after entering any decryption key.
+
+
+
+  Making Soup
+  -----------
+   A quick glance at the amounts used for the ingredients in the recipe, shows that they are all
+   in the ASCII range of 'a'-'z'. Printing these ASCII character in the order they appear in the
+   "Ingredients" section, yields garbage:
+     "ewsndfsaeeteucinewhstekorcluahr"
+   Notice, however that the garbage output string contains all the letters to spell "hackfu". This
+   suggests that the letters are simply in the wrong order. The next obvious attempt is to print
+   the ASCII characters in the order that their corresponding ingredients are added to the soup in
+   the "Method" section. Doing this reveals the solution to the challenge:
+     "hackfuwhereitlandswesetourscene"
+
+Appendix 1: Probability of an Incorrect Key Yielding Valid Padding
+==================================================================
+
+  Public Key Cryptography Standards (PKCS) #5 specifies a padding strategy, in which a plain text
+  message is padded with bytes until its length (the number of bytes used to represent the message)
+  is a multiple of 8. All messages are padded with at least one byte. If the plain text message is
+  padded with N bytes, each of the N bytes have the numeric value N (assuming N < 256). In the
+  following illustration, we represent bytes as two hexadecimal digits, for example, the
+  byte 01101110 is represented as 6E.
+
+  Let M be a plain text message of length n bytes.
+  If (n + 1) MOD 8 = 0, the byte 01 is appended to M.
+  If (n + 2) MOD 8 = 0, the bytes 0202 are appended to M.
+  ...
+  If (n + 8) MOD 8 = 0, the bytes 0808080808080808 are appended to M.
+  Note that if n is already a multiple of 8 ((n + 8) MOD 8 = 0), we still append eight 08 bytes
+  to M. This is done to prevent ambiguity between a padded message and an unpadded message ending
+  in valid padding. This padding strategy is explained in more detail in [2].
+
+  The probability of an incorrect key yielding valid padding, is approximately equal to the
+  probability of a random message having valid padding.
+
+  Let X_1 be the event where the random message ends with 01.
+  Let X_2 be the event where the random message ends with 0202.
+  ...
+
+  The probability of X_1 occurring is the probability that a byte is randomly assigned the
+  value 01, which is 1/256.
+  The probability of X_2 occurring is the probability that a byte is randomly assigned the
+  value 02 AND, another byte is independently assigned the value 02, which is (1/256) * (1/256).
+  ...
+
+  We can calculate the probability of a random message having valid padding by summing over the
+  probabilities X_i, for 1 <= i <= 8, that is (let ** denote "to the power of"):
+    (1/256) + (1/256) ** 2 + (1/256) ** 3 + ... + (1/256) ** 8, which is approximately equal 0.004.
+  Therefore, the probability of an incorrect key yielding valid padding is approximately 0.004.
+  Equivalently, an incorrect key will produce a padding error with a probability of
+  approximately 0.996.
+
+
+
+TOOLS USED
+==========
+
+1. apktool: https://ibotpeaches.github.io/Apktool
+
+
+REFERENCES
+==========
+
+1. https://en.wikipedia.org/wiki/Android_application_package
+2. https://tools.ietf.org/html/rfc8048
