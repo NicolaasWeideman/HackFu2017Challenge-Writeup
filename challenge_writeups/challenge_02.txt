@@ -1,0 +1,105 @@
+###################################
+    CHALLENGE 02 (Cryptography)
+###################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains three files: a PDF file "Erno Rubik.pdf", the instructions
+  in "instructions.txt" and the encrypted solution file in "solution.txt.enc". The instructions
+  suggest that we are searching for a message hidden in a Rubik's Cube.
+
+
+INFORMATION GATHERING
+=====================
+
+  The name of the PDF file, "Erno Rubik.pdf" is a reference to the inventor of the Rubik's Cube
+  puzzle [1]. In this PDF file, an image of a cross, resembling an unfolded cube is shown.
+  Each face of the cube consists of nine smaller squares, each shaded with a colour and containing
+  a single symbol. The colours are blue, red, green, orange, yellow and white. The symbols are all
+  either a lowercase letter, uppercase letter, an underscore or a circle. There are exactly nine
+  squares with a specific colour and exactly one square with a specific symbol.
+  
+  Underneath the cube, a string of 225 characters appears. The string is made up of the
+  symbols 'b', 'r', 'g', 'o', 'y', 'w', '1', '2' and '3'. The first 75 characters of the string
+  consist of only letter symbols and the final 150 characters consist of only number symbols.
+  We will refer to this string as the "cipher text".
+
+
+SOLUTION
+========
+
+  Rearranging the Rubik's Cube
+  ----------------------------
+   From the information gathered, it is quite clear to see that the unfolded cube resembles an
+   unsolved Rubik's Cube puzzle. The first important step in solving this challenge, is to note
+   that it is unnecessary to solve the Rubik's Cube (in the conventional sense) to complete the
+   challenge. As is the case with a physical Rubik's Cube, each square has exactly one correct
+   final position. This correct final position can be determined for each square by inspecting
+   it's constant neighbours, that is, squares on the same subcube, which will consequently be next
+   to the square in every possible arrangement of subcubes. For example, suppose there is a red
+   square with blue and white constant neighbours. This square will have to be the corner square
+   of the red face, bordering the blue and white face. A similar strategy is followed for squares
+   with only one constant neighbour. As middle squares cannot move they can be used to determine
+   the final colour for a specific face of the cube. Therefore, as we know beforehand what the
+   colour of each of the faces will ultimately be, we can simply place each square in its correct
+   position. Figure 1 shows the final arrangement of symbols in the solved Rubik's Cube.
+    __________________________________________________________________________
+   |           1 2 3    1 2 3   1 2 3   1 2 3                                 |
+   |                     (B)                                                  |
+   | 1                  L X U                                                 |
+   | 2                  z n F                                                 |
+   | 3                  c H i                                                 |
+   |                                                                          |
+   |            (O)      (W)     (R)     (Y)                                  |
+   | 1         l Z A    p t s   G M a   j d S                                 |
+   | 2         V e o    K E b   m N h   v W O                                 |
+   | 3         u T Y    . Q g   y f r   J B P                                 |
+   |                                                                          |
+   |                     (G)                                                  |
+   | 1                  R x _                                                 |
+   | 2                  k w D                                                 |
+   | 3                  I q C                                                 |
+   |__________________________________________________________________________|
+   | Figure 1: The final arrangement of symbols in the solved Rubik's Cube.   |
+   |  The symbols in brackets above each 3 by 3 face indicate the colour,     |
+   |  where (O) stands for orange, (B) for blue, (W) for white, (G) for green,|
+   |  (R) for red and (Y) for yellow.                                         |
+   |  The numbers indicate the row and column numbers for each 3 by 3 face.   |
+   |__________________________________________________________________________|
+
+
+
+  Deciphering the Message
+  -----------------------
+   Looking at the symbols found in the cipher text, it is reasonable to assume the letters
+   indicate colours. That is, 'o' stands for orange, 'b' for blue, 'w' for white, 'g' for green,
+   'r' for red and 'y' for yellow. Note that there are exactly two number symbols in the cipher
+   text for each letter symbol. Furthermore, the numbers the numbers are all between 1
+   and 3 (inclusive). It seems as if each letter in the cipher text, together with two numbers
+   map to a letter on the Rubik's Cube, with the numbers serving as a type of coordinate system
+   and the letter indicating a specific face. To aide in the deciphering of the cipher text,
+   rewrite it as follows: 
+
+     brbgboorrooyoobgwrorwrgbwrwoworogoorwrrorwbobgorrooobrowyborobworyrrbwogoor
+     313223323223123212231213321113222222113232223232322332212232213132312322223
+     231131233222131132332313332322323331331231231123322231233223233113332323333
+
+   Each column represents a single character in the plain text.
+   To decipher the first character, we take of the blue face, the letter of the square on the 3rd
+   row and 2nd column, which yields an 'H'. Similarly for the second character, we take of the red
+   face, the letter of the square on the 1st row and 3rd column, which yields an 'a'. Proceeding
+   in this manner, the solution to the challenge can be obtained:
+     "HackFuThreeBlocksNorthRightAtTheDoomsayerKnockThreeTimesOnTheUglyOrangeDoor"
+
+
+REFERENCES
+==========
+
+1: https://en.wikipedia.org/wiki/Rubik%27s_Cube
+
