@@ -1,0 +1,231 @@
+##########################################
+    CHALLENGE 06 (Reverse Engineering)
+##########################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains four files: two files of unknown type "decryptor"
+  and "e85150c59040bbfe9b14ee0f5fa9e2cf". The instructions in "instructions.txt" and the encrypted
+  solution file in "solution.txt.enc". The instructions suggest we are trying to decode a message
+  from an executable and encrypted text files.
+
+
+INFORMATION GATHERING
+=====================
+
+  Running the bash "file" command with "decryptor" as the input file, informs us that the file is
+  a 64-bit, ELF executable. We can give ourselves permission to execute the file, by using the
+  bash command:
+    chmod u+x ./decryptor
+  Executing the file, prints a banner:
+    "Dianetic Decryptor by 4c 2e 52 6f 6e 20 48 75 62 62 61 72 64"
+  According to Wikipedia "Dianetics is a set of ideas and practices adopted by Scientologists" [1].
+  The hexadecimal string, when converted to the equivalent ASCII characters, is "L. Ron Hubbard",
+  the creator of dianetics [1].
+
+  The execution of the rest of the program prints the following strings:
+    1. "So I hope you know how to reverse engineer"
+    2. "Because I am looking for a file to make the next stage appear!"
+    3. "Find the key or rename the file."
+    4. "Persevere through the struggle, and it will all be worthile [sic]."
+  This is followed by a message stating that the program is searching for the file in the
+  current directory. Lastly the three strings are printed:
+    1. "[!] File Not Found..."
+    2. "[-] Find the key or rename the file,"
+    3. "[-] both of these will get you to the next stage"
+  The program also seems to use some delay function, at the start and while searching the
+  current directory.
+
+  The name of the second file, "e85150c59040bbfe9b14ee0f5fa9e2cf", seems to be a hash,
+  however brief attempts to crack the hash proved to be futile. The file contains binary data, but
+  the readable string "Phantom-Key" occurs throughout the file.
+
+
+SOLUTION
+========
+
+  Reverse Engineering the decryptor Executable
+  --------------------------------------------
+   Using the GNU Debugger (GDB), we can analyse the disassembled machine code of the "decryptor"
+   executable. A quick look at the main function reveals the following:
+     1. It calls a function named "banner"
+        0x0000000000400e1d <+313>:   mov    eax,0x0
+        0x0000000000400e22 <+318>:   call   0x4009d8 <banner>
+     2. It makes a call to "fopen"
+        0x0000000000400e27 <+323>:   lea    rax,[rbp-0x40]
+        0x0000000000400e2b <+327>:   mov    esi,0x4014dd
+        0x0000000000400e30 <+332>:   mov    rdi,rax
+        0x0000000000400e33 <+335>:   call   0x400880 <fopen@plt>
+     3. It makes another call to "fopen"
+        0x0000000000400e6b <+391>:   mov    esi,0x401551
+        0x0000000000400e70 <+396>:   mov    edi,0x401554
+        0x0000000000400e75 <+401>:   call   0x400880 <fopen@plt>
+     4. It makes a call to a function named "create_decrypt_key"
+        0x0000000000400e7e <+410>:   lea    rax,[rbp-0x30]
+        0x0000000000400e82 <+414>:   mov    rdi,rax
+        0x0000000000400e85 <+417>:   call   0x400c21 <create_decrypt_key>
+
+   Viewing the disassembled machine code of the "banner" function reveals that "decryptor" calls
+   the "sleep" function multiple times, which caused the delays noted earlier:
+     0x0000000000400a1c <+68>:    mov    edi,0x3
+     0x0000000000400a21 <+73>:    call   0x4008b0 <sleep@plt>
+   To save some time, let us hook the "sleep" function to prevent "decryptor" from delaying. To do
+   this, we create our own version of the sleep function in the file "sleephook.c", which does
+   nothing, as shown in Listing 1.
+   Note that this is done purely for convenience and not required to solve the challenge.
+     __________________________________________
+    | #include <unistd.h>                      |
+    | #include <dlfcn.h>                       |
+    |                                          |
+    | unsigned int sleep(unsigned int seconds) |
+    | {                                        |
+    |   return 0;                              |
+    | }                                        |
+    |__________________________________________|
+    |Listing 1: Code from "sleephook.c", which |
+    | defines a custom "sleep" function.       |
+    |__________________________________________|
+
+   We compile "sleephook.c" with the bash command:
+     gcc sleephook.c -o sleephook.so -fPIC -shared -ldl -D_GNU_SOURCE
+   Running "decryptor" with the new "sleep" function is done with the bash command:
+     LD_PRELOAD="./sleephook.so" ./decryptor
+   From within GDB the same can be achieved with the command:
+     set environment LD_PRELOAD=./sleephook.so
+   and running the program from within GDB as usual.
+   Now, no delays will be present.
+
+   Next setting a breakpoint just before the first call to fopen, allows us to inspect which file
+   is opened. This is done by printing the value in the register "rax" as a string, which reveals
+   the string "phantom_bits". A closer inspection of the disassembled code following this call
+   to fopen, reveals that "decryptor" exits if fopen returns 0, that is if the file is not
+   found [2]:
+     0x0000000000400e33 <+335>:    call   0x400880 <fopen@plt>
+     0x0000000000400e38 <+340>:    mov    QWORD PTR [rbp-0x50],rax
+     0x0000000000400e3c <+344>:    cmp    QWORD PTR [rbp-0x50],0x0
+     0x0000000000400e41 <+349>:    jne    0x400e6b <main+391> ; Jump if fopen did not return NULL
+     0x0000000000400e43 <+351>:    mov    edi,0x4014df
+     0x0000000000400e48 <+356>:    call   0x4007c0 <puts@plt>
+     0x0000000000400e4d <+361>:    mov    edi,0x4014f8
+     0x0000000000400e52 <+366>:    call   0x4007c0 <puts@plt>
+     0x0000000000400e57 <+371>:    mov    edi,0x401520
+     0x0000000000400e5c <+376>:    call   0x4007c0 <puts@plt>
+     0x0000000000400e61 <+381>:    mov    edi,0x0
+     0x0000000000400e66 <+386>:    call   0x4008a0 <exit@plt> ; else print some strings and exit
+
+   Using the information gathered thus far, as well as the hint "Find the key or rename the file",
+   it is reasonable to assume we have to rename the other file,
+   "e85150c59040bbfe9b14ee0f5fa9e2cf", to "phantom_bits". Indeed, after doing this, running
+   "decryptor" again created a file named "Final_Stage".
+
+   {ALTERNATIVE ROUTE}
+   Note that it is actually unnecessary to reverse engineer the "decryptor" executable.
+   The repeating sequences of the string "Phantom-Key" in the file
+   "e85150c59040bbfe9b14ee0f5fa9e2cf", strongly suggests that the file has been encrypted with
+   an Exclusive Or (XOR) cipher in which each byte of the original file was used in an XOR
+   operation with some byte in the key "Phantom-Key". Long sequences of NULL bytes in the original
+   file will result in the key appearing in the encrypted file (since: 0 XOR x = x).
+   We can therefore obtain the file "Final_Stage" by implementing our own XOR cipher.
+   Listing 2 contains the relevant Python code.
+   ______________________________________
+  | fd_e = open(ENCRYPTED_FILE, 'r')     |
+  | fd_d = open(DECRYPTED_FILE, 'w')     |
+  | cipher_text = fd_e.read()            |
+  |                                      |
+  | key = "Phantom-Key"                  |
+  | key_len = len(key)                   |
+  | for i in range(len(cipher_text)):    |
+  |   c = cipher_text[i]                 |
+  |   k = key[i % key_len]               |
+  |   m = ord(c) ^ ord(k)                |
+  |   fd_d.write(chr(m))                 |
+  |______________________________________|
+  | Listing 2: Python code to decrypt    |
+  |  the Final_Stage file.               |
+  |______________________________________|
+
+
+
+  Reverse Engineering the Final_Stage Executable
+  --------------------------------------------
+   Running the bash "file" command with "Final_Stage" as the input file, informs us that this file
+   is also a 64-bit, ELF executable. Running the "Final_Stage" executable, gives two possible
+   hints:
+     1. It prints "Unless you know how to go back in sys.time".
+     2. Somewhat later it prints by "Today is not the day, Our Messiah passed away".
+   This suggests we need to change the system date to the day "Our Messiah passed away".
+   As Final_Stage also contains some delays, we can reuse sleephook.so from the previous section
+   and run "Final_Stage" as:
+     LD_PRELOAD="./sleephook.so" ./Final_Stage
+
+   Quickly scanning through the disassembled machine code of "Final_Stage", reveals two
+   interesting sections. Calls are made to the "time" and "localtime" functions, which are used to
+   obtain the system time:
+     0x0000000000402082 <+88>:     call   0x401a60 <time@plt>
+     0x0000000000402087 <+93>:     lea    rax,[rbp-0x100]
+     0x000000000040208e <+100>:    mov    rdi,rax
+     0x0000000000402091 <+103>:    call   0x4017d0 <localtime@plt>
+   Later, three comparisons are made with the integers 1986, 1 and 24, which could resemble a date.
+     0x00000000004021f4 <+458>:    cmp    DWORD PTR [rbp-0x114],0x7c2 ; 1986
+     0x00000000004021fe <+468>:    jne    0x40227a <main+592>
+     0x0000000000402200 <+470>:    cmp    DWORD PTR [rbp-0x110],0x1   ; 1
+     0x0000000000402207 <+477>:    jne    0x40227a <main+592>
+     0x0000000000402209 <+479>:    cmp    DWORD PTR [rbp-0x10c],0x18  ; 24
+     0x0000000000402210 <+486>:    jne    0x40227a <main+592>
+   If any of these comparisons fail, the program exits, otherwise a function named "decrypt"
+   is called. Further investigation reveals that L. Ron Hubbard passed away
+   on January 24 1986 [3]. Using all this information, we can make an educated guess that
+   the "Final_Stage" executable checks whether the system date is January 24 1986. The
+   system time can be set to this date, by using the bash command:
+     sudo date --set=01/24/1986
+   and running the Final_Stage executable again, reveals the solution to the challenge:
+     "hackfusummonthedemonatyourperilitisnotintelligentactuallyitsferal"
+
+   {ALTERNATIVE ROUTE}
+   If we should attempt to solve the challenge on a machine for which we do not have the
+   appropriate privileges to set the system date, we can hook the "localtime" function
+   in a similar way that we hooked the "sleep" function earlier. To do this, we create
+   our own version of the "localtime" function in the file "timehook.c", which always
+   returns the required date, as shown in Listing 3.
+     _________________________________________________________
+    | #include <stdlib.h>                                     |
+    | #include <time.h>                                       |
+    |                                                         |
+    | struct tm *localtime(const time_t *timer)               |
+    | {                                                       |
+    |   struct tm *correct_date = malloc(sizeof (struct tm)); |
+    |   correct_date->tm_mday = 24; /* 24th       */          |
+    |   correct_date->tm_mon = 0;   /* of January */          |
+    |   correct_date->tm_year = 86; /* 1986       */          |
+    |   return correct_date;                                  |
+    | }                                                       |
+    |_________________________________________________________|
+    |Listing 3: Code from "timehook.c", which                 |
+    | defines a custom "localtime" function.                  |
+    |_________________________________________________________|
+
+    We compile "timehook.c" with the bash command:
+     gcc timehook.c -o timehook.so -fPIC -shared -ldl -D_GNU_SOURCE
+   Running "Final_Stage" with the new "localtime" function (and optionally new "sleep" function)
+   is done with the bash command:
+     LD_PRELOAD="./timehook.so ./sleephook.so" ./decryptor
+
+
+TOOLS USED
+==========
+
+1. gdb: https://www.gnu.org/software/gdb/
+
+
+REFERENCES
+==========
+
+1. https://en.wikipedia.org/wiki/Dianetics
+2. http://www.man7.org/linux/man-pages/man3/fopen.3.html
+3. https://en.wikipedia.org/wiki/L._Ron_Hubbard
