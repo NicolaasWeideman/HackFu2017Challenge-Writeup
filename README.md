@@ -1,7 +1,7 @@
 # HackFu2017Challenge-Writeup
 This repository contains the write-ups for my solutions to challenges contained within the  HackFu 2017 Challenge.
 
-Firstly, thank you to the people at [MWR Info Security](https://hackfu.mwrinfosecurity.com/) for their effort to create the challenges.
+Firstly, thank you to the people at [MWR Info Security](https://hackfu.mwrinfosecurity.com/) for creating the challenges.
 The challenges were difficult enough to keep one's interest, but not so difficult that one would abandon a challenge completely.
 
 As the submission system, used for the Challenge, accepted solutions in plain text format, all my submissions are formatted only as plain text. I have, however, attempted to make them readable.
