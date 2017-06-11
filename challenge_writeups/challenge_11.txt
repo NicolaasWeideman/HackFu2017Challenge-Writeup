@@ -1,0 +1,187 @@
+####################################
+    CHALLENGE 11 (Steganography)
+####################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  On 11 April 2017, MWR InfoSecurity posted the following update on social media:
+  "Articles to the left of purpose aren't bereft All challenges now seem done But seek ye out a
+  final one". This alludes to the existence of a secret, eleventh challenge.
+
+
+INFORMATION GATHERING
+=====================
+
+  The social media update stated "Articles to the left of purpose aren't bereft", this means a
+  good starting point for the search of a secret challenge would be in the articles posted on the
+  competition website [1]. The competition website contains four articles. These are titled
+  "WHO - OR - WHAT IS THE BAGMAN?", posted on 1 March 2016, "DARK MESSAGES HIDDEN IN POPULAR
+  MUSIC", posted on 20 April 2016, "WAS LEON CZOLGOSZ A TIME-TRAVELLER FROM THE TWENTY-SECOND
+  CENTURY?", posted on 21 June 2016 and "THE EYE OF PROVIDENCE: HARMLESS SYMBOL OR ILLUMINATI
+  PSYOP?", posted 5 November 2016. On each article page an image is displayed with some text
+  underneath.
+
+
+SOLUTION
+========
+
+  Backmasking
+  -----------
+   In the HTML source code of the article regarding dark messages in music, the words
+   "question everything. find the message. first 7 words form a page" are hidden as a comment at
+   the end of the source code. Furthermore, some letters in the text of the article are surrounded
+   by "<span>" HTML tags. Concatenating these tagged letters, gives the string
+   "plasmabandOverthrow". Given the context, it is reasonable to assume we must search for a
+   message hidden in a way similar to backmasking.
+
+   Eventually, given the string "plasmabandOverthrow" it was decided to search for a song with the
+   name "Overthrow" by an artist named "Plasma", or a song named "Plasma" by an artist named
+   "Overthrow". Since the article mainly focuses on metal bands, we will restrict our search to
+   this music genre. Two death metal bands named "Plasma" [2] and "Overthrow" [3] were found but
+   neither of these have the appropriate song names. After various Google searches involving
+   combinations of key words such as "plasma", "band", "overthrow" and "backmasking" an album
+   "Coup d'Etat" by the artist "Plasmatics" was found. A Coup d'etat is the overthrow of a
+   state [4]. Furthermore, on this album is a song "The Damned", that contains a backmasked
+   message. This message is: "Consensus programming is dangerous to your health. The brainwashed
+   do not know they are brainwashed". Recalling the hint:
+   "first seven words form a page" and visiting the page
+   "/consensusprogrammingisdangeroustoyourhealth" on the competition website reveals the next part
+   of the secret challenge.
+
+
+
+  Fixing the JavaScript
+  ---------------------
+   The page of the second part of the secret challenge contains the backward message
+   ".egassem terces eht derevocsid tsuj ev'uoY .snoitalutargnoC", which is the backmasked message
+   found in the Pink Floyd song "Empty Spaces" [5]. The page also contains a broken JavaScript
+   script. Within the broken JavaScript appears the comment "TODO: Fix issues", as well as a
+   variable named "password". This suggests we should use the JavaScript to obtain a secret that
+   can be used to progress in the secret challenge.
+
+   The JavaScript code contains some bugs, commented out statements and obfuscation. To properly
+   fix the code one would need to know what the code is supposed to do. As this is not clear, it
+   will be easier to infer possible values used to calculate the password. We can infer the
+   possible values, by looking at the commented out statements and the values which were assigned
+   to the variables in them.
+
+   The JavaScript code contains an anonymous function that converts the constant integer
+   16180339887498948482 to the same number in a specific base. The function is used to calculate
+   the password. We will refer to this constant integer as "phi". A formated version of the
+   anonymous function is shown in Listing 1.
+    ___________________________________________
+   | function (n, a, i) {                      |
+   |   while(i++) {                            |
+   |     try {                                 |
+   |       password = a.toString(n - (i * i)); |
+   |       if (fortytwo > 42) {                |
+   |         password = password               |
+   |       } else {                            |
+   |         password = "/" + password         |
+   |       }                                   |
+   |       return password;                    |
+   |     } catch(e) {                          |
+   |     }                                     |
+   |   }                                       |
+   | } (fortytwo, 16180339887498948482, two))  |
+   |___________________________________________|
+   | Listing 1. The anonymous JavaScript       |
+   |  function used to calculate the password. |
+   |___________________________________________|
+
+   The anonymous function in Listing 1 takes three parameters and is called at the end of a
+   heavily broken function. The heavily broken function is called twice and the results are
+   concatenated to form a string which is written to the webpage. We assume this is the
+   required secret. In the JavaScript code the parameter "a" is given the value of "phi" with each
+   call of the anonymous function, therefore we only need to infer the values for the parameters
+   "n" and "i", for each call. Unfortunately, since "phi" is much larger than the JavaScript
+   constant Number.MAX_SAFE_INTEGER [6], we cannot assume the function used to convert the base of
+   the number, "toString(n)" with "n" the base, will definitely convert the number correctly.
+   Indeed, converting "phi" to a different base yields inconsistent results over different
+   JavaScript engines. For example, converting "phi" to base 17 yields the result
+   "5b1a9e8gee88b4ed" in Firefox, "5b1a9e8gee88b700" in Chrome and "5b1a9e8gee88b77d" when running
+   "nodejs" as a console application. We need to account for these inconsistencies when solving
+   the challenge.
+
+   By inspecting the broken JavaScript code, we can guess the most probable values for the
+   parameters. The variable "fortytwo" is passed as the parameter "n" from the broken function to
+   the anonymous function. There are three statements assigning a value to the variable "fortytwo"
+   (some of which are commented out). These statements are:
+    1. fortytwo = two;,
+    2. fortytwo=[!+[]+!+[]+!+[]+!+[]]+[!+[]+!+[]];, and
+    3. fortytwo=fortytwo*3;
+
+   The second assignment statement is an obfuscated method of assigning the string value "42" to
+   the variable "fortytwo". Both the first and second assignment statements are executed with each
+   call of the broken function. Therefore we will assume the second assignment more probably
+   assigns the required value to the variable "fortytwo". The third assignment is only executed
+   depending on another variable, therefore we will assume it is intended to execute only with a
+   single call of the broken function. Using this reasoning, the parameter "n" is probably either
+   42 or 42 * 3 = 126. To guess exact values for the variable "two", which is passed as parameter
+   "i" to the anonymous function, is slightly more convoluted. However, since "two" is usually
+   used in conjunction with boolean operators, it (and therefore "i") is most likely a small
+   value. We make this assumption as JavaScript interprets the boolean value "True" as the integer
+   1 and the value "False" as 0.
+
+   The function "toString" for an integer can only convert to a base between 2 and 36
+   (inclusive) [7]. Consequently, as both possible values of "n" (42 and 126) are larger than 36,
+   a number will be subtracted. Looking back to Listing 1 we know that this number will be the
+   square number (i * i). We assumed that "i" has a small value, so we look for the smallest
+   square numbers that produce a number between 2 and 36 when subtracted from 42 and 126,
+   respectively. For the number 42, this square number is 9, as 42 - (3 * 3) = 33. Similarly, for
+   the number 126 it is the square number 100, as 126 - (10 * 10) = 26.
+
+   Converting "phi" to base 26 and 33 yields the numbers "6dea94235k0m7i" and "9n4fuqb92d9ct",
+   respectively. These numbers are obtained when using the JavaScript engine found in the Firefox
+   browser. As noted earlier, using a different JavaScript engine yields different numbers.
+   Therefore, when solving the challenge, numbers from various JavaScript engines should be
+   attempted. However, since Firefox ultimately produced the values required to solve the
+   challenge, we will only proceed with these in this writeup.
+
+   We now have probable outputs for the anonymous JavaScript function, the string "6dea94235k0m7i"
+   for the parameters n = 126 and "i" a small integer and the string "/9n4fuqb92d9ct" for the
+   parameters n = 42 and "i" a small integer. Note the '/' symbol from the second output comes
+   from the "if" condition in the function and "42 > 42" being false. The forward slash in the
+   output suggests the password represents a webpage. As we still do not know the order in which
+   these strings should be concatenated, we need to consider both "6dea94235k0m7i/9n4fuqb92d9ct"
+   and "/9n4fuqb92d9ct6dea94235k0m7i". Therefore, we try requesting the webpages
+   "6dea94235k0m7i/9n4fuqb92d9ct" and "/9n4fuqb92d9ct6dea94235k0m7i" from the server. The second
+   string, "/9n4fuqb92d9ct6dea94235k0m7i", reveals the next part of the secret challenge.
+
+
+
+  Finding the Message
+  -------------------
+   The page of the third part of the secret challenge contains only an image. The image shows a
+   person stretching in front of a sunset with three hexadecimal strings overlaid. The hexadecimal
+   strings are:
+    1. 882dd232c0425bb9366544f84f0a7b6c
+    2. 4e18b6ce78b4cf8780811cb1815f0bb7
+    3. 90791ed805bd5b00d78527d39d9ef7e4
+
+   Each of these strings consist of 32 hexadecimal characters. This suggests that these strings
+   are cryptographic hashes. Doing a Google search for each of these hashes, reveals the
+   original words. These words are:
+    1. 882dd232c0425bb9366544f84f0a7b6c: MOST
+    2. 4e18b6ce78b4cf8780811cb1815f0bb7: MYSTERIOUS
+    3. 90791ed805bd5b00d78527d39d9ef7e4: MESSAGE
+
+   We can submit these three words as the Challenge Code name on the submissions page.
+
+
+REFERENCES
+==========
+
+1. https://covertcorrespondent2017.mwrinfosecurity.com
+2. http://www.metal-archives.com/bands/Plasma
+3. http://www.metal-archives.com/bands/Overthrow
+4. https://en.wikipedia.org/wiki/Coup_d%27etat
+5. https://en.wikipedia.org/wiki/Empty_Spaces
+6. https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER
+7. https://www.w3schools.com/jsref/jsref_tostring_number.asp
