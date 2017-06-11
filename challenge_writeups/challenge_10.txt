@@ -1,0 +1,311 @@
+##########################################
+    CHALLENGE 10 (Reverse Engineering)
+##########################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains three files: an executable file "lights-out.exe", the
+  instructions in "instructions.txt" and the encrypted solution file in "solution.txt.enc".
+  The instructions suggest that we are searching for a message in a binary file
+  named "lights-out.exe".
+
+
+INFORMATION GATHERING
+=====================
+
+  Running the bash "file" command with "lights-out.exe" as the input file, informs us that the
+  file is a PE32 executable. Executing the program shows a quote from the Book of the Spark and
+  immediately gives an input prompt for "Input 1:".
+
+
+SOLUTION
+========
+
+  Cracking Input One
+  ------------------
+   Opening the executable with the IDA debugger, allows us to analyse the disassembled
+   machine code. Listing 1 show the code used to reverse engineer the required input
+   for "Input 1", the first section.
+    ______________________________________________________________________________
+   | 00401711 mov     eax, [ebp+4]                                                |
+   | 00401714 mov     ds:dword_405214, eax                                        |
+   | 00401719 mov     [esp+38h+var_38], offset aInput1 ; "Input 1: "              |
+   | 00401720 call    printf                                                      |
+   | 00401725 mov     eax, ds:_iob                                                |
+   | 0040172A mov     [esp+38h+var_30], eax                                       |
+   | 0040172E mov     [esp+38h+var_34], 0C8h                                      |
+   | 00401736 mov     [esp+38h+var_38], offset unk_405140                         |
+   | 0040173D call    fgets                                                       |
+   | 00401742 mov     byte ptr ds:dword_405208, 0                                 |
+   | 00401749 lea     eax, [ebp+var_17]                                           |
+   | 0040174C mov     [esp+38h+var_34], eax                                       |
+   | 00401750 mov     [esp+38h+var_38], offset unk_405140                         |
+   | 00401757 call    sub_40164E                                                  |
+   | 0040175C mov     eax, [ebp+4]                                                |
+   | 0040175F cmp     eax, offset sub_4017E8                                      |
+   | 00401764 setnz   al                                                          |
+   | 00401767 test    al, al                                                      |
+   | 00401769 jz      short loc_401779                                            |
+   | 0040176B mov     [esp+38h+var_38], offset aExitCode02 ; "Exit Code 02"       |
+   | 00401772 call    puts                                                        |
+   | 00401777 jmp     short loc_4017E5                                            |
+   |______________________________________________________________________________|
+   |Listing 1: The disassembled machine code responsible for checking "Input 1".  |
+   | The string "Input 1:" is printed (at 00401719-00401720),                     |
+   | a string is read in from stdin and converted to bytes (at 0040172A-00401757) |
+   | a value from this byte array is compared to a required value (at 0040175F).  |
+   |______________________________________________________________________________|
+
+
+   At the addresses 0040175C-0040175F it can be seen that a value from the byte array created from
+   the input, is compared to the value 004017E8. This comes down to checking if the value 004017e8
+   appears at position 54 of the input string. This can be achieved by entering the input string:
+     "000000000000000000000000000000000000000000000000000000e8174000"
+   Note that when the executable converts strings to hexadecimal numbers, the strings are parsed
+   as a sequence of pairs of hexadecimal digits with a little-endian byte order [1]. Consequently,
+   when writing the value, 004017e8, the bytes must be written from the least significant to the
+   most, hence "e8174000".
+
+
+
+  Cracking Input Two
+  ------------------
+   After entering the correct first input string, the executable proceeds to the second section.
+   Listing 2 shows the relevant code.
+    ______________________________________________________________________________
+   | 004017EE mov     eax, [ebp+4]                                                |
+   | 004017F1 mov     ds:dword_405214, eax                                        |
+   | 004017F6 mov     [ebp+var_C], 0                                              |
+   | 004017FD lea     eax, [ebp+var_C]                                            |
+   | 00401800 mov     ds:dword_405220, eax                                        |
+   | 00401805 mov     [ebp+var_10], 0                                             |
+   | 0040180C lea     eax, [ebp+var_10]                                           |
+   | 0040180F mov     ds:dword_405224, eax                                        |
+   | 00401814 mov     [esp+48h+var_48], offset aInput2 ; "\nInput 2: "            |
+   | 0040181B call    printf                                                      |
+   | 00401820 mov     eax, ds:_iob                                                |
+   | 00401825 mov     [esp+48h+var_40], eax                                       |
+   | 00401829 mov     [esp+48h+var_44], 0C8h                                      |
+   | 00401831 mov     [esp+48h+var_48], offset unk_405140                         |
+   | 00401838 call    fgets                                                       |
+   | 0040183D mov     byte ptr ds:dword_405208, 0                                 |
+   | 00401844 lea     eax, [ebp+var_1F]                                           |
+   | 00401847 mov     [esp+48h+var_44], eax                                       |
+   | 0040184B mov     [esp+48h+var_48], offset unk_405140                         |
+   | 00401852 call    sub_40164E                                                  |
+   | 00401857 mov     eax, [ebp+var_C]                                            |
+   | 0040185A cmp     eax, 0BEEFh                                                 |
+   | 0040185F jnz     short loc_40186B                                            |
+   | 00401861 mov     eax, [ebp+var_10]                                           |
+   | 00401864 cmp     eax, 0DEADh                                                 |
+   | 00401869 jz      short loc_401891                                            |
+   |______________________________________________________________________________|
+   |Listing 2: The disassembled machine code associated with verifying input two. |
+   | The string "Input 2:" is printed (at 00401814-0040181B),                     |
+   | a string is read in from stdin and converted to bytes (at 00401838-00401852) |
+   | two values from this byte array are compared to                              |
+   | two required values (at 0040185A and at 00401864, respectively).             |
+   |______________________________________________________________________________|
+
+
+   At the addresses 00401857-0040185A it can be seen that a value from the byte array created
+   from the input, is compared to the value 0000BEEF. Similarly, at the addresses
+   00401861-00401864 a value is compared to the value 0000DEAD. A last comparison is done between
+   a value from the byte array and the value 0040191D (not shown). This comes down to checking if
+   the value 0000DEAD appears at position 30 of the input string and the value 0000BEEF at
+   position 38. Furthermore, the address 0040191D should be inserted at position 70 of the input
+   string. This can be achieved by entering the input string:
+     "000000000000000000000000000000adde0000efbe00000000000000000000000000001d194000"
+
+
+
+  Cracking Input Three
+  --------------------
+   Entering the correct string for Input 2, allows the executable to proceed to the third section.
+   Using a similar approach as when we cracked input one and two, we can crack input three as well.
+    ____________________________________________________________________________
+   | 00401923 mov     eax, [ebp+4]                                              |
+   | 00401926 mov     ds:dword_405214, eax                                      |
+   | 0040192B mov     [ebp+var_C], 0                                            |
+   | 00401932 mov     [esp+48h+var_48], offset aInput3 ; "\nInput 3: "          |
+   | 00401939 call    printf                                                    |
+   | 0040193E mov     eax, ds:_iob                                              |
+   | 00401943 mov     [esp+48h+var_40], eax                                     |
+   | 00401947 mov     [esp+48h+var_44], 0C8h                                    |
+   | 0040194F mov     [esp+48h+var_48], offset unk_405140                       |
+   | 00401956 call    fgets                                                     |
+   | 0040195B mov     byte ptr ds:dword_405208, 0                               |
+   | 00401962 lea     eax, [ebp+var_1B]                                         |
+   | 00401965 mov     [esp+48h+var_44], eax                                     |
+   | 00401969 mov     [esp+48h+var_48], offset unk_405140                       |
+   | 00401970 call    sub_40164E                                                |
+   | 00401975 mov     eax, [ebp+4]                                              |
+   | 00401978 cmp     eax, offset sub_401A03                                    |
+   | 0040197D setnz   al                                                        |
+   | 00401980 test    al, al                                                    |
+   | 00401982 jz      short loc_401992                                          |
+   | 00401984 mov     [esp+48h+var_48], offset aExitCodeXx ; "Exit Code xx"     |
+   | 0040198B call    puts                                                      |
+   | 00401990 jmp     short loc_4019FE                                          |
+   | ...                                                                        |
+   | 00401A03 push    ebp                                                       |
+   | 00401A04 mov     ebp, esp                                                  |
+   | 00401A06 push    esi                                                       |
+   | 00401A07 push    ebx                                                       |
+   | 00401A08 sub     esp, 20h                        ; char *                  |
+   | 00401A0B cmp     eax, 0FEEDF00Dh                                           |
+   | 00401A10 jz      short loc_401A1E                                          |
+   | 00401A12 mov     [esp+28h+var_28], 0                                       |
+   | 00401A19 call    exit                                                      |
+   |____________________________________________________________________________|
+   |Listing 3: The disassembled machine code associated with verifying input 3. |
+   | The string "Input 3:" is printed (at 00401932-00401939),                   |
+   | a string is read in from stdin and converted to bytes                      |
+   | (at 00401956-00401970), a value from this byte array is compared           |
+   | to a required value (at 00401978).                                         |
+   | Later another value from this byte array is compared to a required value   |
+   | (at 00401A0B).                                                             |
+   |____________________________________________________________________________|
+
+
+   At the addresses 00401975-00401978 a value from the byte array created from the input, is
+   compared to the value 00401A03. Shortly thereafter, at address 00401A0B, a value from the byte
+   array is compared to the value FEEDF00D. This comes down to verifying if the value FEEDFOOD is
+   inserted at position 30 of the input string and the address 00401A03 to be inserted at
+   position 62 of the input string. The following string passes the checks of Input 3:
+     "0000000000000000000000000000000df0edfe000000000000000000000000031a4000"
+
+
+
+  Cracking the Decryption
+  -----------------------
+   The submission of the three input values leads to a string comparison between the first 10 bytes
+   of the string "notyetdone" and some other string that seems to be made up of the addresses of
+   each of the three previous sections. The addresses string is:
+     "\x30\x30\x34\x30\x31\x37\x30\x42\x30\x30\x34\x30\x31\x37\x45\x38\x30\x30\x34\x30\x31\x39\x31\x44"
+   Listing 4 shows the disassembled machine code doing this comparison.
+    ______________________________________________________________________
+   | 00401A1E mov     [esp+28h+var_20], 0Ah                               |
+   | 00401A26 mov     [esp+28h+var_24], offset aNotyetdone ; "notyetdone" |
+   | 00401A2E mov     [esp+28h+var_28], 405040h                           |
+   | 00401A35 call    strncmp                                             |
+   | 00401A3A mov     [ebp+var_10], eax                                   |
+   | 00401A3D mov     [ebp+var_14], 3Dh                                   |
+   | 00401A44 mov     [ebp+var_C], 0                                      |
+   | 00401A4B jmp     short loc_401A8E                                    |
+   | _____________________________________________________________________|
+   |Listing 4: A string comparison between the first 10 bytes of the      |
+   | string "notyetdone" and the first 10 bytes of some string made up    |
+   | of addresses.                                                        |
+   |______________________________________________________________________|
+
+
+   What follows resembles a decryption section, where the Exclusive Or (XOR) of the bytes of the
+   cipher text and the bytes of the addresses string mentioned above is calculated, as shown in
+   Listing 5. The cipher text is (the line breaks were inserted for readability):
+     "\x06\x0e\x17\x12\x03\x01\x10\x18\x07\x0b\x5b\x5c\x51\x5f\x44\x43
+      \x5e\x2d\x47\x56\x5b\x45\x5d\x5b\x2c\x4c\x44\x5c\x51\x43\x45\x58
+      \x43\x19\x0a\x1c\x18\x13\x11\x0a\x00\x07\x0b\x44\x55\x46\x55\x42
+      \x43\x59\x2c\x47\x58\x55\x44\x48\x58\x30\x59\x42\x55"
+    _____________________________________________________________
+   | 00401A4D mov     eax, [ebp+var_C]                           |
+   | 00401A50 add     eax, offset unk_403040                     |
+   | 00401A55 movzx   esi, byte ptr [eax]                        |
+   | 00401A58 mov     ebx, [ebp+var_C]                           |
+   | 00401A5B mov     [esp+28h+var_28], offset byte_405040       |
+   | 00401A62 call    strlen                                     |
+   | 00401A67 lea     ecx, [eax-1]                               |
+   | 00401A6A mov     eax, ebx                                   |
+   | 00401A6C mov     edx, 0                                     |
+   | 00401A71 div     ecx                                        |
+   | 00401A73 mov     eax, edx                                   |
+   | 00401A75 movzx   eax, ds:byte_405040[eax]                   |
+   | 00401A7C mov     edx, esi                                   |
+   | 00401A7E xor     edx, eax                                   |
+   | 00401A80 mov     eax, [ebp+var_C]                           |
+   | 00401A83 add     eax, offset unk_403040                     |
+   | 00401A88 mov     [eax], dl                                  |
+   | 00401A8A add     [ebp+var_C], 1                             |
+   | 00401A8E                                                    |
+   | 00401A8E loc_401A8E:                                        |
+   | 00401A8E mov     eax, [ebp+var_C]                           |
+   | 00401A91 cmp     eax, [ebp+var_14]                          |
+   | 00401A94 jl      short loc_401A4                            |
+   |_____________________________________________________________|
+   | Listing 5: The decryption section of the executable.        |
+   |_____________________________________________________________|
+
+
+   At addresses the 00401A4D-00401A55 the decryption process retrieves a value of the cipher text.
+   Following this, at addresses 00401A58-00401A73 the decryption process calculates the modulus
+   between a counter and one less than the length of the decryption key. This modulus is used to
+   retrieve a value from the decryption key, at address 00401A75. The XOR of the two retrieved
+   values is calculated at address 00401A7E. To save ourselves time, let us rewrite the decryption
+   process as a Python script. This Python script is shown in Listing 6.
+    _________________________________________________________________
+   | message = ""                                                    |
+   | for i in range(len(cipher_text)):                               |
+   | m = chr(ord(cipher_text[i]) ^ ord(key[i % (len(key) - 1)]))     |
+   | message += m                                                    |
+   | print message                                                   |
+   |_________________________________________________________________|
+   | Listing 6: The decryption process as a Python script.           |
+   |_________________________________________________________________|
+
+
+   Running the decryption process with the default decryption key, yields garbage output. To crack
+   the decryption, let us assume the first six characters of the decrypted message should
+   be "hackfu". If this assumption is correct, we can calculate the first six characters of the
+   correct decryption key. This is done by taking the XOR of a byte in the message and the
+   corresponding byte in the cipher text. Doing this yields the following:
+     '\x06' XOR 'h' = 'n'
+     '\x0e' XOR 'a' = 'o'
+     '\x17' XOR 'c' = 't'
+     '\x12' XOR 'k' = 'y'
+     '\x03' XOR 'f' = 'e'
+     '\x01' XOR 'u' = 't'
+
+   Recalling the string comparison subsequent to the third section, it can be assumed the
+   decryption key should at least start with "notyetdone". Setting the decryption key to
+   be "notyetdone", allows us to view more of the message, which yields the string "hackfutwin",
+   followed by garbage.
+
+   Given the context, it can be assumed the word after "hackfu" in the message should be
+   "twinkle", which again, allows us to extend our knowledge of the decryption key, by taking the
+   XOR of the start of the message and the cipher text. Doing this yields the partial decryption
+   key:
+     "notyetdone\x30\x30\x34"
+
+   Comparing the new characters "\x30\x30\x34", to the original decryption key, suggests that the
+   string "notyetdone" was simply prepended to the start of the original decryption key.
+   Setting the decryption key to be:
+     "notyetdone\x30\x30\x34\x30\x31\x37\x30\x42\x30\x30\x34\x30\x31\x37\x45\x38\x30\x30\x34\x30\x31\x39\x31\x44"
+   yields the solution to the challenge:
+     "hackfutwinkleoutnowfoullittlestarwehavenointerestinwhatyouare"
+
+   {ALTERNATIVE ROUTE}
+   Only when revisiting the challenge after the initial completion thereof, was it seen that
+   "notyetdone" can be prepended to the original decryption key by supplying it as a command line
+   argument.
+   Consequently, it is unnecessary to crack the encryption, the challenge can be completed by
+   running:
+     lights-out.exe notyetdone
+   and supplying appropriate values for "Input 1", "Input 2" and "Input 3", as explained above.
+
+
+TOOLS USED
+==========
+
+IDA debugger: https://www.hex-rays.com/products/ida/index.shtml
+
+
+REFERENCES
+==========
+
+1. https://en.wikipedia.org/wiki/Endianness
