@@ -1,0 +1,86 @@
+###################################
+    CHALLENGE 04 (Cryptography)
+###################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains four files: two are raw text files "key" and "pass", the
+  instructions in "instructions.txt" and the encrypted solution file in "solution.txt.enc".
+  The instructions suggest we need to solve a puzzle from a book.
+
+
+INFORMATION GATHERING
+=====================
+
+  Both the files "key" and "pass" contain cipher text. The file "pass" only contains the
+  encrypted string:
+   "MQ1O27IM3E3EIML23KQ4EIQILSLKI526L3KAL61Q6IJ63ZMI257KAL652IML56AL652IMLEXQ6O"
+  The file "key" contains a single line with 100118 characters of cipher text. The cipher text is
+  made up of the following 27 symbols:
+    '/', '0', '1', '2', '3', '4', '5', '6', '7', '8',
+    'A', 'C', 'D', 'E', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'S', 'W', 'X', 'Z'
+  The symbol '/' occurs repeatedly, in long sequences.
+
+
+SOLUTION
+========
+
+  Decrypting the "key" file
+  -------------------------
+   As the symbol '/' seems to appear without any pattern, we will ignore it when analysing
+   the cipher text. This leaves 26 cipher characters, which corroborates the possibility that
+   the original text could have been encrypted with a substitution cipher, or a transposition
+   cipher. By performing character frequency analysis, the most frequently occurring characters
+   are found. The top ten most frequently occurring characters, along with their number of
+   occurrences and frequencies are shown below:
+    L: 8417  11.933%
+    I: 6216   8.813%
+    Q: 5786   8.203%
+    5: 5348   7.582%
+    M: 4816   6.828%
+    K: 4617   6.546%
+    3: 4454   6.315%
+    E: 3873   5.491%
+    4: 3708   5.257%
+    6: 3531   5.006%
+   When treating one or more '/' characters in the cipher text as whitespace, we can perform word
+   frequency analysis as well. The top five most frequently occurring words, along with their
+   number of occurrences and frequencies are given below:
+    IML : 0962  5.437%
+    QKA : 0762  4.307%
+    Q   : 0655  3.702%
+    I5  : 0355  2.006%
+    3   : 0256  1.447%
+   We know the two most used letters in English are 'e' and 't' [1]. Furthermore, we know the most
+   used word in English is the word "the" [2]. Both the fact that "IML" is the most frequently
+   occurring word in the cipher text and that 'L' and 'I' are the most frequently occurring
+   characters in the cipher text, support that 'I' maps to 't' and 'L' maps to 'e', so that "IML"
+   maps to "the". It is therefore reasonable to assume the original text has been encrypted with
+   a monoalphabetic substitution cipher.
+
+   The rest of the "key" file can be decrypted by iteratively making more guesses regarding
+   the mapping from cipher text characters to plain text letters and analysing the plain text
+   words that start to form.
+
+
+
+  Decrypting the "pass" file
+  --------------------------
+  The decrypted "key" file does not seem to contain any significant information. It is merely
+  a hotchpotch of nursery rhymes. However, the same substitution key used to decrypt
+  the "key" file, can also decrypt the "pass" file, yielding the solution to the challenge:
+    "hackfuthisisthefinalstatementofreindercartwrightfounderoftheorderofthespark"
+
+
+REFERENCES
+==========
+
+1. https://en.wikipedia.org/wiki/Letter_frequency
+2. ttps://en.wikipedia.org/wiki/Most_common_words_in_English
+
