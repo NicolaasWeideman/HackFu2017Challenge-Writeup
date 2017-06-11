@@ -1,0 +1,153 @@
+####################################
+    CHALLENGE 01 (Steganography)
+####################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains three files: a file of unknown type "AldrinApollo11", the
+  instructions in "instructions.txt" and the encrypted solution file in "solution.txt.enc".
+  The instructions suggest that we are searching for a clue in an image of 1969 US Moon landing.
+
+
+INFORMATION GATHERING
+=====================
+
+  The name of the file of unknown type, "AldrinApollo11" is a clear reference to Buzz Aldrin, one
+  of the astronauts to visit the Moon on the Apollo 11 mission. Running the bash "file" command
+  with "AldrinApollo11" as the input file, informs us that the file is a JPEG image. Opening this
+  file with an image viewer, shows an image of an astronaut on the Moon. Performing a reverse
+  image search with Google using this image, returns the original image file, which seems to come
+  from Wikipedia [1].
+
+  Inspecting the image with a hexeditor program reveals an additional 386 bytes after the 0xFFD9
+  end-of-file indicator for the JPEG image, as well as other interesting strings such as
+  "pass3/password". Furthermore, the bytes directly following the 0xFFD9 end-of-file indicator
+  are 0x50 and 0x4B, or "PK", which is used as the header for ZIP archives [2].
+
+
+SOLUTION
+========
+
+  Extracting the ZIP Archive from the Image
+  -----------------------------------------
+   The additional bytes found after the JPEG content of the file suggest that a ZIP archive was
+   appended to the image. To extract this archive from the JPEG image, the bash command "dd" can
+   be used. Only the offset of the ZIP archive in the JPEG image is required.
+
+   As noted before, the JPEG file ends with the bytes 0xFF and 0xD9 and the ZIP archive starts
+   with 0x50, 0x4B. This means that the offset for the start of the ZIP archive is the same as
+   the offset of the 0x50 byte of 0x50, 0x4B. We can search for this offset using the bash
+   command:
+     xxd AldrinApollo11 | grep -P 'ff ?d9 ?50 ?4b'
+   Which yields the output:
+     0615cb0: ddad 80ff d950 4b03 0414 0300 0000 005b  .....PK........[
+   The "xxd" command prints the bytes of the "AldrinApollo11" file as hexadecimal characters.
+   We pipe these hexadecimal characters to the "grep" command searching for the JPEG end-of-file
+   bytes, followed by the ZIP archive header bytes. From the output it can be seen that the byte
+   0x50 is at the offset 0x0615CB0 + 0x5 = 0x0615CB5, or 6380725 as a decimal number.
+
+   Using the obtained offset, the ZIP archive can be extracted from the image to the file
+   "secret.zip" using the following "dd" command:
+     dd if=AldrinApollo11 bs=1 skip=6380725 of=secret.zip
+   The file "secret.zip" contains a subdirectory, "pass3" containing a single, encrypted file
+   "password". All attempts to crack the password proved to be futile.
+
+
+
+  Analysing the Image
+  -------------------
+   Using the original version of the "AldrinApollo11" image, obtained from Wikipedia [1], we can
+   detect all modifications made to the version contained in the challenge directory.
+   Listing 1 shows the relevant section of a Python script which performs the comparison between
+   the two versions of the same image. The comparison is achieved by calculating the absolute
+   difference between the red, green and blue components, respectively, of corresponding pixels
+   in each image. The differences are then scaled to increase their visibility. The result is
+   saved as a new image, which we will refer to as the "difference image".
+    _________________________________________________
+   | im1 = Image.open(FILE1)                         |
+   | im2 = Image.open(FILE2)                         |
+   |                                                 |
+   | pixels1 = im1.load()                            |
+   | pixels2 = im2.load()                            |
+   |                                                 |
+   | im_new = Image.new(im1.mode, im1.size)          |
+   | pixels_new = im_new.load()                      |
+   | max_i, max_j = im1.size                         |
+   | for i in range(max_i):                          |
+   |   for j in range(max_j):                        |
+   |     pixel1 = pixels1[i, j]                      |
+   |     pixel2 = pixels2[i, j]                      |
+   |     r_d = abs(pixel1[0] - pixel2[0])            |
+   |     g_d = abs(pixel1[1] - pixel2[1])            |
+   |     b_d = abs(pixel1[2] - pixel2[2])            |
+   |                                                 |
+   |     r_ds = min(r_d * SCALE, 255)                |
+   |     g_ds = min(g_d * SCALE, 255)                |
+   |     b_ds = min(b_d * SCALE, 255)                |
+   |     pixels_new[i, j] = (r_ds, g_ds, b_ds)       |
+   |                                                 |
+   | im_new.save(FILE_NEW)                           |
+   |_________________________________________________|
+   |Listing 1: Calculating and scaling the           |
+   | difference between two images of the same size. |
+   |_________________________________________________|
+
+
+   The difference image shows the text "DidTheMoonLandingReallyHappen?!?" in the lower right
+   corner. This, however, is not the password to the encrypted ZIP archive.
+
+   Further inspection of the difference image reveals a lot of noise in the background. This means
+   that many minute modifications have been made to the individual pixels of the original image.
+   This is a strong indication of Least Significant Bit (LSB) steganography (See Appendix 1).
+   The tool "steghide" performs LSB steganography. Using this tool, entering the passphrase
+   "DidTheMoonLandingReallyHappen?!?", extracts a file named "pass2". The file "pass2" contains
+   the string:
+     "HereMenFromThePlanetEarthFirstSetFootUponTheMoon,July1969A.D.WeCameinPeaceForAllMankind"
+   This proved to be the password to the encrypted ZIP archive, found in the previous section.
+
+   Extracting "password" from the ZIP archive reveals the solution to the challenge:
+     "HackFuTheresAFalseWallInTheBackOfTheClosetQuiteObviousReally"
+
+
+Appendix 1: Least Significant Bit Steganography
+===============================================
+
+ Least Significant Bit (LSB) steganography aims to embed a, possibly encrypted, secret file in an
+ innocuous file, referred to as the cover file. This is achieved by modifying the least
+ significant bits in the bytes of the cover file. This is done in such a way that the secret file
+ is spread out to be represented by these least significant bit modifications. For example if a
+ byte of the secret file is "00101010" (the secret byte) and the eight bytes "00100111",
+ "00001010", "10101000", "01110000", "00011101", "01111010", "01000100" and "00010011" appear in
+ the cover file. LSB steganography will modify the least significant bits of the eight bytes to
+ represent the secret byte. Therefore the eight bytes will be modified to be "00100110",
+ "00001010", "10101001", "01110000", "00011101", "01111010", "01000101" and "00010010". Note that
+ only four of the eight bytes had to be changed to represent the secret byte. LSB steganography
+ relies on the assumption that modifying the least significant bits of the cover file will not
+ yield a noticeable change. This makes image files good cover files, since if three bytes
+ represent the red, green and blue (RGB) components of a pixel, increasing or decreasing these
+ byte values by one (the effect of modifying the least significant byte), will result in a colour
+ that is practically indistinguishable from the original. Still, LSB steganography can be detected
+ in images, by inspecting sections that one would expect to be a single colour
+ (for example, the sky). If these sections have many changes in their least significant bits
+ between pixels, it could mean that a secret file is embedded in the image.
+
+
+TOOLS USED
+==========
+
+1. steghide: http://steghide.sourceforge.net/
+2. Google reverse image search: https://images.google.com/
+
+
+REFERENCES
+==========
+
+1. https://en.wikipedia.org/wiki/File:Aldrin_Apollo_11.jpg
+2. https://en.wikipedia.org/wiki/Zip_(file_format)#File_headers
+
