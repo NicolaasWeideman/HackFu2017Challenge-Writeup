@@ -1,0 +1,146 @@
+#################################################
+    CHALLENGE 08 (Steganography/Cryptography)
+#################################################
+Author: Chronic0x90er
+
+Note: For correct formatting, please view with a monospaced font such as "Courier",
+with line wrapping disabled.
+
+
+CHALLENGE DESCRIPTION
+=====================
+
+  The challenge directory contains four files: a compressed archive
+  "286755fad04869ca523320acce0dc6a4.7z", an audio file "047b704a141707ec15a8171ab1d37dbd.wav", the
+  instructions in "instructions.txt" and the encrypted solution file in "solution.txt.enc".
+  The instructions suggest that we are searching for a message in an audio file and zipped folder.
+
+
+INFORMATION GATHERING
+=====================
+
+  The name of the compressed archive is the MD5 hash for the string "password\n". The audio file
+  sounds like static playing at different pitches. Using Sonic Visualiser, the spectrogram of the
+  audio file can be viewed, which resembles a QR code.
+  The compressed archive is encrypted, not even the file names contained therein can be seen.
+
+
+SOLUTION
+========
+
+  Extracting the Compressed Archive
+  ---------------------------------
+   Unfortunately, the QR code obtained from the spectrogram of the audio file, is distorted and
+   cannot be read by a QR scanner. Luckily, it is clear enough to correct manually. Scanning the
+   corrected QR code with a QR scanner yields the text:
+     "domoarigatomrroboto"
+   Keeping in mind that the name of the encrypted, compressed archive is the MD5 hash for
+   "password\n" and that "domoarigatomrroboto" could resemble a username and password combination,
+   with "mrroboto" being the username, eventually the password for the encrypted, compressed
+   archive, "domoarigato" was guessed.
+
+   {ALTERNATIVE ROUTE}
+   It is completely recognised that obtaining the password for the encrypted, compressed archive
+   in the above mentioned way, requires a rather remarkable stroke of luck. An approach with a
+   larger probability of success is to use a password cracker, such as "John the Ripper" ("john").
+   First we use "7z2john" to convert the encrypted, compressed archive into a format recognised by
+   "john":
+     7z2john 286755fad04869ca523320acce0dc6a4.7z > 286755fad04869ca523320acce0dc6a4.john
+   Next we attempt to crack the encrypted, compressed archive by running "john" with, arguably,
+   the most famous list of passwords "rockyou" (Available at [1]):
+     john --wordlist=./rockyou 286755fad04869ca523320acce0dc6a4.john
+   Since the password "domoarigato" is contained within the "rockyou" password list, given enough
+   time, the password for the encrypted, compressed archive will be cracked.
+
+
+
+  Solving Mr. Roboto
+  ------------------
+   Uncompressing the archive, reveals two files: a text file "readme.txt" and an image
+   file "mrroboto.png". The text file contains only the words "going into: first plus then minus"
+   and something about PyCharm.
+
+   The image consists of 11 by 11 coloured squares (each 8 by 8 pixels), we will refer to these
+   as "cells". There appear to be three types of cells.
+     1. Red cells: Cells in which all pixels are shaded with the same light red colour, the shade
+        (255, 20, 20) to be exact.
+     2. White cells: Cells in which all pixels are shaded with white.
+     3. RGB cells: Cells containing a 4 by 4 pixel inner square in the middle (the inner square),
+        surrounded by a 1 pixel thick border (the middle square), which in turn is surrounded by
+        a 1 pixel thick border (the outer square). One of the inner-, middle- and outer square is
+        a shade of red, one is a shade of green and one a shade of blue. The order in which the
+        shades of red, green and blue appear from the outside to the inside, varies from
+        cell to cell. For example, an RGB cell with a red shaded outer square, green shaded middle
+        square and blue shaded inner square, looks similar to the following, where each 'r', 'g'
+        and 'b' character resembles a shade of red, green or blue pixel respectively:
+          r r r r r r r r
+          r g g g g g g r
+          r g b b b b g r
+          r g b b b b g r
+          r g b b b b g r
+          r g b b b b g r
+          r g g g g g g r
+          r r r r r r r r
+
+
+   Red and White cells only appear on the diagonal cells and no two Red cells appear in the same
+   row or column. RGB cells appear only on the cells not on a diagonal and on the cell at
+   the center.
+
+   The hint given in the "readme.txt" file "going into: first plus then minus", could mean that we
+   need to add the colour value of outer square to the colour value of the middle square and
+   subtract the value of the inner square from this sum.
+
+   Doing this for each RGB cell, yields a value between the ASCII codes for 'a' and 'z',
+   in each case. Converting these values to ASCII text, yields the following
+   ('#' indicates a Red cell and '_' indicates a White cell):
+     _ t d t p e l g b o _
+     e # o l o u r i n _ l
+     h e _ m i o o l _ n l
+     t o a _ a n a _ i e a
+     u o b e _ b # i d m t
+     f s d t b l a i l d a
+     k c d s _ e _ w u n r
+     c b o _ e h t # o o u
+     a c # n r s r y _ t o
+     h _ c a l l e d c _ l
+     # c h s e o s y y e _
+   Note that by reading up from the bottom left corner (ignoring the first "#") the string
+   "hackfuthe" is visible. Furthermore, when starting at an # and continuing in a specific
+   direction, character sequences that are almost words seem to appear:
+     > "olour" (continuing left from the # in the second column),
+     > "odd" (continuing up from the # in the third column) and
+     > "the" (continuing left from the # in the 8th column).
+   Note that in each case, it is in the row or column that comes clockwise after the #
+   that yields the word-like character sequences.
+
+   This suggests that we need to rotate the squares formed by a Red cell and corresponding three
+   White cells, such that the Red cell is in the top left corner:
+    # h a c k f u t h e _
+    c # o l o u r i n _ t
+    h e # o d d b a _ n d
+    s o n # t h e _ m e t
+    e o r w # a _ s i m p
+    o s s i b l e t o d e
+    s c r i _ b _ e o n l
+    y b y _ a n a _ l o g
+    y c _ o u l d i _ t b
+    e _ c a l l e d c _ o
+    _ l o u r a t a l l _
+
+   Rotating the squares in this way reveals the solution to the challenge:
+     "hackfuthecolourintheoddbandsonthemeteorwasimpossibletodescribeonlybyanalogycoulditbecalledcolouratall"
+
+
+TOOLS USED
+==========
+
+1. Sonic Visualiser: http://www.sonicvisualiser.org/
+2. John the Ripper: http://www.openwall.com/john/
+
+
+REFERENCES
+==========
+
+1. https://wiki.skullsecurity.org/Passwords
+
