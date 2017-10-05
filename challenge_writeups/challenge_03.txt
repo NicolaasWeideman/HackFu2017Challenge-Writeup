@@ -39,7 +39,7 @@ SOLUTION
   As the twinkle melody is only a slight adaptation of "Twinkle, Twinkle, Little Star", it is
   reasonable to assume the solution to the challenge is rather hidden in the mystery melody.
   The length of the short notes in the mystery melody are significant, as twenty-eighth
-  (or seventh) notes do note appear in standard musical theory [1]. After some trial and error,
+  (or seventh) notes do not appear in standard musical theory [1]. After some trial and error,
   it was concluded that the seven possible twenty-eighth notes of the mystery melody for each
   quarter note of the twinkle melody, represents a 7-bit binary number. A twenty-eighth note, of
   any pitch, represents a 1, while a twenty-eighth rest represents a 0. The seven-bit number
